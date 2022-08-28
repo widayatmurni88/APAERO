@@ -15,9 +15,9 @@ class CreatePilotProjectExperiencesTable extends Migration
     {
         Schema::create('pilot_project_experiences', function (Blueprint $table) {
             $table->uuid('id')->primary();
-            $table->string('name');
-            $table->date('date_start');
-            $table->date('date_end');
+            $table->string('name')->nullable();
+            $table->date('date_start')->nullable();
+            $table->date('date_end')->nullable();
             $table->uuid('biodata_id')->index();
             $table->timestamps();
         });

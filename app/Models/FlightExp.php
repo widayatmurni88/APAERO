@@ -29,4 +29,5 @@ class FlightExp extends Model
 
     protected $table = 'flight_experiences';
     protected $fillable = ['hours_flight', 'biodata_id', 'air_craf_id'];
+    protected $hidden = ['created_at', 'updated_at'];
 }

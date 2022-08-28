@@ -59,4 +59,15 @@ class Licence extends Controller{
         $licence = Lc::where('id', $req->id)->update($data);
         return response()->json(compact('licence'));
     }
+
+    public function searchByName($name=null){
+        if (trim($name) != null) {
+            $licences = Lc::where('name', 'like', "%{$name}%")
+                        ->get(['id', 'name', 'num_period', 'type_period']);
+            return response()->json(compact('licences'));
+        } else {
+            $licences=$this->getAll();
+            return response()->json(compact('licences'));
+        }
+    }
 }

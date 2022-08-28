@@ -51,7 +51,15 @@ class FlightExp extends Controller{
         return $fex;
     }
 
+    public function getTotalFExpByPeople($peopleId){
+        return FE::selectRaw('SUM(flight_experiences.hours_flight) as hours_flight')
+                ->where('biodata_id', $peopleId)
+                ->get()->first();
+    }
+
     public function getAllPeopleExps(){
+        $pic = new PIC();
+        $top = new PTOP();
         $peoples=[];
         $peopls = $this->getPeoples();
         foreach ($peopls as $p) {
@@ -59,7 +67,9 @@ class FlightExp extends Controller{
                 'id' => $p->id,
                 'name' => $p->name,
                 'licence_number' => $p->licence_number,
-                'flight_exp' => $this->getTotalFlightExpById($p->id),
+                'flight_exp' => $this->getTotalFlightExpById($p->id) ?? 0,
+                'pic' => $pic->getPicsById($p->id)['hours_flight'] ?? 0,
+                'top' => $top->getTopById($p->id)['hours_operation'] ?? 0,
             ];
             $peoples = Arr::prepend($peoples, $tmp);
         }
@@ -78,7 +88,8 @@ class FlightExp extends Controller{
             'hours_flight' => $req->hours,
         ];
         $fexp = FE::create($data);
-        return response()->json(compact('fexp'));
+        // return response()->json(compact('fexp'));
+        return $this->getFexpByPeopleId($req->bio_id);
     }
 
     public function getFexGroupByTypeEng($id){
@@ -115,5 +126,48 @@ class FlightExp extends Controller{
             'tops' => $tops,
         ];
         return response()->json(compact('people_fexp'));
+    }
+
+    public function getFexpByPeopleId($people_id){
+        $fexp = [];
+        // FLIGHT EXPERIENCES
+        $groupEngType = $this->getGroupEngFromAircrafByPeopleId($people_id);
+        foreach ($groupEngType as $get) {
+            $ac = $this->getFexpGroupByAircraf($people_id, $get->engine_type_id);
+            $tmp = [
+                'id' => $get->engine_type_id,
+                'name' => $get->name,
+                'total_hours_flight' =>$get->hours_flight,
+                'aircraf' => $ac,
+            ];
+
+            $fexp = Arr::prepend($fexp, $tmp);
+        }
+
+        return response()->json(compact('fexp'));
+    }
+
+    public function searchPeopleExpsByName($name=null){
+        if (trim($name) != null) {
+            $people = new Bio();
+            $pic = new PIC();
+            $top = new PTOP();
+            $peoples=[];
+            $peopls = $people->getPeoplesWithFlightNumByLikeName($name);
+            foreach ($peopls as $p) {
+                $tmp = [
+                    'id' => $p->id,
+                    'name' => $p->name,
+                    'licence_number' => $p->licence_number,
+                    'flight_exp' => $this->getTotalFlightExpById($p->id) ?? 0,
+                    'pic' => $pic->getPicsById($p->id)['hours_flight'] ?? 0,
+                    'top' => $top->getTopById($p->id)['hours_operation'] ?? 0,
+                ];
+                $peoples = Arr::prepend($peoples, $tmp);
+            }
+            return response()->json(compact('peoples'));
+        } else {
+            return $this->getAllPeopleExps();
+        }
     }
 }

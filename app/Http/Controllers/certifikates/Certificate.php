@@ -63,4 +63,15 @@ class Certificate extends Controller
         $cert = Cert::get(['id', 'name', 'period_type', 'valid_period']);
         return response()->json(compact('cert'));
     }
+
+    public function searchByName($name=null){
+        if (trim($name) != null) {
+            $certs = Cert::where('name', 'like', "%{$name}%")
+                        ->get(['id', 'name', 'valid_period', 'period_type']);
+            return response()->json(compact('certs'));
+        } else {
+            $certs = $this->getAll();
+            return response()->json(compact('certs'));
+        }
+    }
 }

@@ -15,9 +15,9 @@ class CreatePilotPassportsTable extends Migration
     {
         Schema::create('pilot_passports', function (Blueprint $table) {
             $table->id();
-            $table->string('number');
-            $table->date('valid_start');
-            $table->date('valid_end');
+            $table->string('number')->nullable();
+            $table->date('valid_start')->nullable();
+            $table->date('valid_end')->nullable();
             $table->boolean('active')->default(true);
             $table->uuid('biodata_id')->index();
             $table->timestamps();

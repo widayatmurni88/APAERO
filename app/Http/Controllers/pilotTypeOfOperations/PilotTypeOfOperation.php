@@ -26,8 +26,24 @@ class PilotTypeOfOperation extends Controller
                     ->get();
     }
 
+    public function getTopById($peopleId){
+        return ptop::selectRaw('SUM(hours_operation) as hours_operation')
+                ->where('biodata_id', $peopleId)
+                ->get()->first();
+    }
+
     public function getTopData($peopleId){
         $topdt = $this->getTopByPeopleId($peopleId);
         return $topdt;
+    }
+
+    public function getTops($bio_id){
+        $tops = $this->getTopByPeopleId($bio_id);
+        return response()->json(compact('tops'));
+    }
+
+    public function getTotalHoursByPeopleId($bio_id){
+        $total = $this->getTopById($bio_id);
+        return $total;
     }
 }

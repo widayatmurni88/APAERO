@@ -30,6 +30,12 @@ class PilotInCommand extends Controller
                 ->get();
     }
 
+    public function getPicsById($peopleId){
+        return PIC::selectRaw('SUM(pilot_in_commands.hours_flight) as hours_flight')
+                ->where('biodata_id', $peopleId)
+                ->get()->first();
+    }
+
     public function getPicData($peopleId){
         $picdt = [];
         $picByEngType = $this->getPicGroupByEngType($peopleId);
@@ -44,6 +50,11 @@ class PilotInCommand extends Controller
             $picdt = Arr::prepend($picdt, $tmp);
         }
         return $picdt;
+    }
+
+    public function getPicDataById($peopleId){
+        $pics = $this->getPicData($peopleId);
+        return response()->json(compact('pics'));
     }
 
     public function storeData(Request $req){

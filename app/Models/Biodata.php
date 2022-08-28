@@ -42,5 +42,6 @@ class Biodata extends Model
         'created_at',
         'updated_at',
         'user_id',
+        'is_deleted'
     ];
 }

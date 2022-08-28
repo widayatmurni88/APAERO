@@ -4,6 +4,7 @@ namespace App\Http\Controllers\biodatas;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use JWTAuth;
 use Validator;
 use App\Http\Controllers\User;
 use Illuminate\Support\Str;
@@ -57,6 +58,20 @@ class Biodata extends Controller
         return mbio::join('flight_licence_numbers', 'flight_licence_numbers.biodata_id', '=', 'biodatas.id')
                         ->where('flight_licence_numbers.active', true)
                         ->where('biodatas.is_deleted', false)
+                        ->orderBy('biodatas.name', 'DESC')
+                        ->get([
+                            'biodatas.id',
+                            'biodatas.name',
+                            'flight_licence_numbers.number as licence_number'
+                        ]);
+    }
+
+    public function getPeoplesWithFlightNumByLikeName($name){
+        return mbio::join('flight_licence_numbers', 'flight_licence_numbers.biodata_id', '=', 'biodatas.id')
+                        ->where('flight_licence_numbers.active', true)
+                        ->where('biodatas.is_deleted', false)
+                        ->where('biodatas.name', 'like', "%{$name}%")
+                        ->orderBy('biodatas.name', 'DESC')
                         ->get([
                             'biodatas.id',
                             'biodatas.name',
@@ -73,31 +88,36 @@ class Biodata extends Controller
         if (!$usr->cekExistingEmail($dataAkun->email)) {
             $akun = $this->createAccount($dataAkun);
             if ($akun) {
+                $pass = null;
+                $licen = null;
+                $projects = null;
+                $employ = null;
+
                 // CREATE BIODATA
                 $bio = [
                     'user_id'       => $akun->id,
                     'name'          => $dataBio->name,
                     'place_birth'   => $dataBio->place_birth,
                     'date_birth'    => $dataBio->date_birth,
-                    'marrid'        => $dataBio->marrid,
+                    'marrid'        => $dataBio->marrid ?? '1',
                 ];
                 $bio = $this->createBio($bio);
                 
                 // CREATE PASSPORT
                 $pass = [
                     'biodata_id'    => $bio->id,
-                    'number'        => $dataBio->passport->pass_number,
-                    'valid_start'   => $dataBio->passport->date_start,
-                    'valid_end'     => $dataBio->passport->date_end,
+                    'number'        => $dataBio->passport->number ?? NULL,
+                    'valid_start'   => $dataBio->passport->date_start ?? NULL,
+                    'valid_end'     => $dataBio->passport->date_end ?? NULL,
                 ];
                 $pass = $this->createPilotPassport($pass);
                 
                 // CREATE FLIGHT NUMBER
                 $licen = [
                     'biodata_id'    => $bio->id,
-                    'number'        => $dataBio->licence->number,
-                    'valid_start'   => $dataBio->licence->date_start,
-                    'valid_end'     => $dataBio->licence->date_end,
+                    'number'        => $dataBio->licence->number ?? NULL,
+                    'valid_start'   => $dataBio->licence->date_start ?? NULL,
+                    'valid_end'     => $dataBio->licence->date_end ?? NULL,
                 ];
                 $licen = $this->createFlightLicenceNumber($licen);
                 
@@ -105,7 +125,7 @@ class Biodata extends Controller
                 $projects = [];
                 foreach ($dataBio->project as $item) {
                     $data=[
-                        'name' => $item->project_name,
+                        'name' => $item->name,
                         'date_start' => $item->date_start,
                         'date_end' => $item->date_end,
                         'biodata_id' => $bio->id,
@@ -118,15 +138,15 @@ class Biodata extends Controller
                 $employ = [];
                 foreach ($dataBio->employ as $item) {
                     $data=[
-                        'name' => $item->employ_name,
+                        'name' => $item->name,
                         'date_start' => $item->date_start,
                         'date_end' => $item->date_end,
                         'biodata_id' => $bio->id,
                     ];
                     $tmpCreate = $this->createEmployHistory($data);
                     $employ = Arr::prepend($employ, $tmpCreate);
-                }       
-
+                }   
+                
                 $biodatas = [
                     'id' => $bio->id,
                     'email' => $akun->email,
@@ -200,5 +220,224 @@ class Biodata extends Controller
         mbio::where('id', $id)->update(['is_deleted' => true]);
         muser::where('id', $userid->user_id)->update(['is_deleted' => true]);
         return response()->json('success');
+    }
+
+    public function getPeopleById($peopleId){
+        $bio = mbio::join('users', 'users.id', '=', 'biodatas.user_id')
+                    ->where('biodatas.id', $peopleId)
+                    ->get(['users.email',
+                           'biodatas.id',
+                           'biodatas.name',
+                           'biodatas.place_birth',
+                           'biodatas.date_birth',
+                           'biodatas.marrid'])
+                    ->first();
+        $passport = mpilotpass::where('biodata_id', $peopleId)->get();
+        $licence = mflightlicencenumber::where('biodata_id', $peopleId)->get();
+        $projects = projex::where('biodata_id', $peopleId)->get();
+        $emhis = emhis::where('biodata_id', $peopleId)->get();
+
+        $people = [
+            'id' => $bio->id,
+            'email' => $bio->email,
+            'name' => $bio->name,
+            'marrid' => $bio->marrid,
+            'place_birth' => $bio->place_birth,
+            'date_birth' => $bio->date_birth,
+            'passport' => $passport[0],
+            'licence' => $licence[0],
+            'project_exps' => $projects,
+            'employ_histories' => $emhis,
+        ];
+
+        return response()->json(compact('people'));
+    }
+
+    public function updatePeople(Request $req){
+        $data = json_decode($req->getContent());
+        return $this->responseFormat(true, 200, compact('data'));
+    }
+
+    protected function getBioIdFromAuth(){
+        $user = JWTAuth::parseToken()->authenticate();
+        $bio = mbio::where('user_id', $user->id)->select('id')->first();
+        return $bio;
+    }
+
+    public function userInfo(){
+        $bioId = $this->getBioIdFromAuth();
+        if ($bioId) {
+            $bio = mbio::join('users', 'users.id', '=', 'biodatas.user_id')
+                        ->join('flight_licence_numbers', 'flight_licence_numbers.biodata_id', '=', 'biodatas.id')
+                        ->join('pilot_passports', 'pilot_passports.biodata_id', '=', 'biodatas.id')
+                        ->where('biodatas.id', $bioId->id)
+                        ->where('pilot_passports.active', true)
+                        ->where('flight_licence_numbers.active', true)
+                        ->get(['users.email', 
+                               'biodatas.id',
+                               'biodatas.name',
+                               'biodatas.img_av',
+                               'biodatas.last_position',
+                               'flight_licence_numbers.number as licence_number',
+                               'pilot_passports.number as pas_number'])->first();
+            $bio = [
+                'id' => $bio->id,
+                'name' => $bio->name,
+                'email' => $bio->email,
+                'image' => asset('avatars/' . $bio->img_av),
+                'last_position' => $bio->last_position,
+                'licence_number' => $bio->licence_number,
+                'pas_number' => $bio->pas_number,
+            ];
+    
+            return response()->json(['status' => true, 'msg' => compact('bio')]);
+        } else {
+            return response()->json(['status' => false, 'msg' => 'Unauthorized'], 401);
+        }
+    }
+
+    public function getUserBio() {
+        $bioId = $this->getBioIdFromAuth();
+        if ($bioId) {
+            $bio = mbio::join('flight_licence_numbers', 'flight_licence_numbers.biodata_id', '=', 'biodatas.id')
+                        ->join('pilot_passports', 'pilot_passports.biodata_id', '=', 'biodatas.id')
+                        ->where('biodatas.id', $bioId->id)
+                        ->where('pilot_passports.active', true)
+                        ->where('flight_licence_numbers.active', true)
+                        ->get(['biodatas.id',
+                               'biodatas.name',
+                               'biodatas.place_birth',
+                               'biodatas.date_birth',
+                               'biodatas.marrid',
+                               'biodatas.img_av',
+                               'biodatas.last_position',
+                               'flight_licence_numbers.number as licence_number',
+                               'pilot_passports.number as pas_number'])
+                        ->first();
+            $bio = [
+                'id' => $bio->id,
+                'name' => $bio->name,
+                'place_birth' => $bio->place_birth,
+                'date_birth' => $bio->date_birth,
+                'marrid' => $bio->marrid,
+                'last_position' => $bio->last_position,
+                'img_av' => [
+                    'name' => $bio->img_av,
+                    'url' =>  asset('avatars/' . $bio->img_av),
+                ],
+                'flight_licence' => [
+                    'number' => $bio->licence_number,
+                ],
+                'passport' => [
+                    'number' => $bio->pas_number
+                ],
+            ];
+    
+            return response()->json(['status' => true, 'msg' => compact('bio')]);
+        } else {
+            return response()->json(['status' => false, 'msg' => 'Unauthorized'], 401);
+        }
+    }
+
+    public function addNewPassport(Request $req) {
+        $data = [
+            'biodata_id'    => $req->bio_id,
+            'number'        => $req->pass_num ?? NULL,
+            'valid_start'   => $req->date_start ?? NULL,
+            'valid_end'     => $req->date_end ?? NULL,
+        ];
+        // SET ALL MENJADI FALSE
+        mpilotpass::where('active', true)->update(['active' => false]);
+        // INSERT NEW
+        $passport = $this->createPilotPassport($data);
+        return response()->json(compact('passport'));
+    }
+
+    public function addNewFLightLicence(Request $req){
+        $data = [
+            'biodata_id'    => $req->bio_id,
+            'number'        => $req->flicence_number ?? NULL,
+            'valid_start'   => $req->date_start ?? NULL,
+            'valid_end'     => $req->date_end ?? NULL,
+        ];
+
+        // SET ALL ACTIVE FALSE
+        mflightlicencenumber::where('active', true)->update(['active' => false]);
+        // INSERT NEW
+        $flight_licence = $this->createFlightLicenceNumber($data);
+        return response()->json(compact('flight_licence'));
+    }
+
+    public function updateBiodata(Request $req){
+        $data = [
+            'name' => $req->name,
+            'place_birth' => $req->place_birth,
+            'date_birth' => $req->date_birth,
+            'marrid' => $req->marrid,
+            'last_position' => $req->last_position,
+        ];
+        $bio = mbio::where('id', $req->bio_id)->update($data);
+        return response()->json(compact('bio'));
+    }
+
+    public function getRattings($id){
+        $ratings=[];
+        $fexp = mbio::where('biodatas.id', $id)
+                    ->join('flight_experiences', 'flight_experiences.biodata_id', '=', 'biodatas.id')
+                    ->join('air_craf_types', 'air_craf_types.id', '=', 'flight_experiences.air_craf_id')
+                    ->select('air_craf_types.type');
+
+        $rats = mbio::where('biodatas.id', $id)
+                    ->join('pilot_in_commands', 'pilot_in_commands.biodata_id', '=', 'biodatas.id')
+                    ->join('air_craf_types', 'air_craf_types.id', '=', 'pilot_in_commands.air_craft_id')
+                    ->union($fexp)
+                    ->select('air_craf_types.type')
+                    ->get();
+        foreach ($rats as $item) {
+            $ratings = Arr::prepend($ratings, $item->type);
+        }
+        return response()->json(compact('ratings'));
+    }
+
+    public function searchByName($name=null){
+        if (trim($name) != null ) {
+            $biodatas = mbio::join('users', 'users.id', 'biodatas.user_id')
+                        ->join('pilot_passports', 'pilot_passports.biodata_id', '=', 'biodatas.id')
+                        ->join('flight_licence_numbers', 'flight_licence_numbers.biodata_id', '=', 'biodatas.id')
+                        ->where('flight_licence_numbers.active', true)
+                        ->where('pilot_passports.active', true)
+                        ->where('biodatas.is_deleted', false)
+                        ->where('biodatas.name', 'like', "%{$name}%")
+                        ->get([
+                            'users.email',
+                            'biodatas.id',
+                            'biodatas.name',
+                            'biodatas.marrid',
+                            'pilot_passports.number as passport_number',
+                            'flight_licence_numbers.number as licence_number'
+                        ]);
+            return response()->json(compact('biodatas'));
+
+        } else {
+            return $this->getAllSummari();
+        }
+    }
+
+    public function searchCertLicenByName($name=null){
+        if (trim($name) != null ) {
+            $biodatas = mbio::join('flight_licence_numbers', 'flight_licence_numbers.biodata_id', '=', 'biodatas.id')
+                        ->where('flight_licence_numbers.active', true)
+                        ->where('biodatas.is_deleted', false)
+                        ->where('biodatas.name', 'like', "%{$name}%")
+                        ->orderBy('biodatas.name', 'DESC')
+                        ->get([
+                            'biodatas.id',
+                            'biodatas.name',
+                            'flight_licence_numbers.number as licence_number'
+                        ]);
+            return response()->json(compact('biodatas'));
+        } else {
+            return $this->getAllPeopleWithFlightNum();
+        }
     }
 }

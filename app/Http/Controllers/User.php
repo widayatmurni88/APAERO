@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use JWTAuth;
 use Validator;
 use Tymon\JWTAuth\Exceptions\JWTException;  
+use Illuminate\Support\Arr;
 use Illuminate\Http\Request;
 use App\Models\User as muser;
 
@@ -61,6 +62,37 @@ class User extends Controller{
         }
 
         return $this->respondWithToken($token);
+    }
+
+    public function logout(){
+        auth()->logout();
+        return response()->json(['message' => 'User success Signed Out!']);
+    }
+
+    public function getCurrentAccountInfo(){
+        $user = JWTAuth::parseToken()->authenticate();
+        $user = [
+            '_id' => $user->id,
+            'email' => $user->email,
+        ];
+        return response()->json(compact('user'));
+    }
+
+    public function updateEmailnPass(Request $req){
+        $userData = [
+            'email' => $req->email,
+            'password' => bcrypt($req->password),
+        ];
+
+        $update = muser::where('id', $req->id)
+                    ->update($userData);
+
+        if ($update) {
+            return response()->json(['status' => true, 'msg' => $userData]);
+        } else {
+            return response()->json(['status' => false, 'msg' => $update]);
+        }
+
     }
 
     /**

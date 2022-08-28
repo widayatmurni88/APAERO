@@ -12,7 +12,7 @@ class AircrafType extends Controller
         return ACType::create($data);
     }
 
-    protected function getType($id){
+    public function getType($id){
         $type = ACType::join('air_craf_engine_types', 'air_craf_engine_types.id', '=', 'air_craf_types.engine_type_id')
                         ->where('air_craf_types.id', $id)
                         ->get(['air_craf_types.id',
@@ -75,5 +75,19 @@ class AircrafType extends Controller
         }
         
         return response()->json(compact('type'));
+    }
+
+    public function searchByName($name=null){
+        if (trim($name) != null) {
+            $types = ACType::join('air_craf_engine_types', 'air_craf_engine_types.id', '=', 'air_craf_types.engine_type_id')
+                         ->where('air_craf_types.type', 'like', "%{$name}%")
+                         ->get(['air_craf_types.id',
+                                'air_craf_types.type as name',
+                                'air_craf_engine_types.name as type']);
+            return response()->json(compact('types'));
+
+        } else {
+            return $this->showAll();
+        }
     }
 }
